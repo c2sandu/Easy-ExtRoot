@@ -1,0 +1,49 @@
+#!/bin/sh
+
+#backup first
+#dd bs=512 count=1 if=/dev/sda of=/tmp/mbr.bin
+
+if ! $(ls /dev/ | grep -q sda); 
+	then 
+		logger -t extroot_script "no sda device found (no USB inserted?). Script will now exit";
+		echo "No sda device found (no USB inserted?). Script will now exit."
+		exit 1;
+	fi
+
+#remove partition table
+dd bs=512 count=1 if=/dev/zero of=/dev/sda
+
+# create a swap and a root partition
+fdisk /dev/sda <<EOF
+n
+p
+1
+
++256M
+n
+p
+
+
+
+w
+EOF
+
+# tell the kernel about the new partitions
+partx /dev/sda
+
+# make swap and format root partition as ext4
+mkswap /dev/sda1
+mkfs.ext4 /dev/sda2
+
+# extroot stuff...
+mkdir /mnt/sda2
+mount /dev/sda2 /mnt/sda2
+mkdir -p /tmp/cproot
+mount --bind / /tmp/cproot
+tar -C /tmp/cproot -cvf - . | tar -C /mnt/sda2 -xf -
+umount /tmp/cproot
+
+rm /mnt/sda2/etc/init.d/extroot
+
+logger -t extroot_script "Done";
+echo "Done. You should reboot to use extroot"
